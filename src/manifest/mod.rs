@@ -2,15 +2,10 @@ mod lines;
 
 use std::collections::BTreeMap;
 
-use bytes::Bytes;
 use color_eyre::eyre::eyre;
-use futures_core::Stream;
-use futures_util::{
-    io::{AsyncBufRead, Lines},
-    StreamExt,
-};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, Lines};
 
-use crate::{manifest::lines::version_line, util::line_stream_of};
+use crate::manifest::lines::version_line;
 
 use self::lines::{file_line, FileLine, VersionLine};
 
@@ -35,9 +30,9 @@ where
 {
     let header = section.as_header();
     let line = lines
-        .next()
-        .await
-        .ok_or_else(|| eyre!("Missing '{}' header", header))??;
+        .next_line()
+        .await?
+        .ok_or_else(|| eyre!("Missing '{}' header", header))?;
     if line != header {
         return Err(eyre!("Expected '{}' header, got {:?}", header, line));
     }
@@ -51,9 +46,9 @@ where
 {
     expect_header(lines, Section::Version).await?;
     let line = lines
-        .next()
-        .await
-        .ok_or_else(|| eyre!("Missing version line"))??;
+        .next_line()
+        .await?
+        .ok_or_else(|| eyre!("Missing version line"))?;
     let version = version_line(&line)?;
     Ok(version)
 }
@@ -65,15 +60,17 @@ pub(crate) struct Manifest {
 
 pub(crate) async fn load_manifest<B>(stream: B) -> color_eyre::Result<Manifest>
 where
-    B: Stream<Item = reqwest::Result<Bytes>> + Unpin,
+    B: tokio::io::AsyncBufRead + Unpin,
 {
-    let mut lines = line_stream_of(stream);
+    let r = tokio::io::BufReader::new(stream);
+
+    let mut lines = r.lines();
     let mut files = BTreeMap::new();
 
     let version = read_index_version(&mut lines).await?;
     expect_header(&mut lines, Section::Files).await?;
-    while let Some(item) = lines.next().await {
-        let line = item?;
+    while let Some(item) = lines.next_line().await? {
+        let line = item;
         let (filename, data) = file_line(&line)?;
         files.insert(filename.to_owned(), data);
     }

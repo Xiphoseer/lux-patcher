@@ -10,17 +10,16 @@ use std::{
 use argh::FromArgs;
 use assembly_pack::sd0::stream::SegmentedStream;
 use assembly_xml::universe_config::Environment;
-use bytes::Bytes;
 use color_eyre::eyre::Context;
-use futures_core::Stream;
-use futures_util::StreamExt;
+use futures_util::TryStreamExt;
 use log::info;
 use manifest::load_manifest;
 use reqwest::Url;
 use terminal_menu::{button, label, menu, mut_menu, run};
-use tokio::io::AsyncWriteExt;
+use tokio::io::AsyncBufRead;
+use tokio_util::io::StreamReader;
 
-use crate::config::PatcherConfig;
+use crate::{config::PatcherConfig, util::into_io_error};
 
 mod config;
 mod manifest;
@@ -65,15 +64,12 @@ fn join(base: &mut PathBuf, dir: &Path) {
     }
 }
 
-async fn stream_to_file<S>(path: &Path, byte_stream: &mut S) -> color_eyre::Result<()>
+async fn stream_to_file<S>(path: &Path, mut bytes: &mut S) -> color_eyre::Result<()>
 where
-    S: Stream<Item = reqwest::Result<Bytes>> + Unpin,
+    S: AsyncBufRead + Unpin,
 {
     let mut file = tokio::fs::File::create(path).await?;
-    while let Some(bytes) = byte_stream.next().await {
-        let bytes = bytes?;
-        file.write(&bytes).await?;
-    }
+    tokio::io::copy(&mut bytes, &mut file).await?;
     Ok(())
 }
 
@@ -89,6 +85,34 @@ fn decompress_sd0(input: &Path, output: &Path) -> color_eyre::Result<()> {
     Ok(())
 }
 
+struct Downloader {
+    client: reqwest::Client,
+}
+
+impl Downloader {
+    fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+        }
+    }
+
+    async fn get(&self, url: Url) -> color_eyre::Result<reqwest::Response> {
+        let text = self.client.get(url).send().await?;
+        Ok(text)
+    }
+
+    async fn get_text(&self, url: Url) -> color_eyre::Result<String> {
+        let text = self.get(url).await?.text().await?;
+        Ok(text)
+    }
+
+    async fn get_bytes_tokio(&self, url: Url) -> color_eyre::Result<impl tokio::io::AsyncBufRead> {
+        let stream = self.get(url).await?.bytes_stream().map_err(into_io_error);
+        let reader = StreamReader::new(stream);
+        Ok(reader)
+    }
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> color_eyre::Result<()> {
     pretty_env_logger::formatted_builder()
@@ -97,7 +121,7 @@ async fn main() -> color_eyre::Result<()> {
     let args: Options = argh::from_env();
 
     // Create client
-    let client = reqwest::Client::new();
+    let client = Downloader::new();
 
     // Cleanup base parameter
     let options = Url::options();
@@ -114,7 +138,7 @@ async fn main() -> color_eyre::Result<()> {
     info!("Loading {}", env_info_url);
 
     // Get the environment info
-    let env_info_xml = client.get(env_info_url).send().await?.text().await?;
+    let env_info_xml = client.get_text(env_info_url).await?;
     let env_info: Environment = assembly_xml::quick::de::from_str(&env_info_xml)?;
 
     info!("Found {} universe(s)", env_info.servers.servers.len());
@@ -147,7 +171,7 @@ async fn main() -> color_eyre::Result<()> {
 
     info!("Config: {}", patcher_config_url);
 
-    let patcher_config_str = client.get(patcher_config_url).send().await?.text().await?;
+    let patcher_config_str = client.get_text(patcher_config_url).await?;
     let patcher_config = PatcherConfig::from_str(&patcher_config_str)?;
 
     info!("Downloaded patcher config");
@@ -173,7 +197,7 @@ async fn main() -> color_eyre::Result<()> {
     info!("Version file: {}", version_url);
 
     // Get trunk.txt
-    let byte_stream = client.get(version_url).send().await?.bytes_stream();
+    let byte_stream = client.get_bytes_tokio(version_url).await?;
 
     let versions = load_manifest(byte_stream).await?;
     info!(
@@ -205,7 +229,7 @@ async fn main() -> color_eyre::Result<()> {
         info!("index is {}", &index_url);
         info!("saving index to {}", index_sd0_path.display());
 
-        let mut byte_stream = client.get(index_url).send().await?.bytes_stream();
+        let mut byte_stream = client.get_bytes_tokio(index_url).await?;
         stream_to_file(&index_sd0_path, &mut byte_stream).await?;
 
         info!(

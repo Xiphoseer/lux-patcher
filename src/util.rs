@@ -1,23 +1,6 @@
-use bytes::Bytes;
-use futures_core::Stream;
-use futures_util::{
-    io::{AsyncBufRead, AsyncRead, BufReader, Lines},
-    AsyncBufReadExt, TryStreamExt,
-};
-
-pub(crate) fn async_read_of<B>(stream: B) -> impl AsyncRead
+pub(crate) fn into_io_error<E>(error: E) -> std::io::Error
 where
-    B: Stream<Item = reqwest::Result<Bytes>> + Unpin,
+    E: std::error::Error + Send + Sync + 'static,
 {
-    stream
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))
-        .into_async_read()
-}
-
-pub(crate) fn line_stream_of<B>(stream: B) -> Lines<impl AsyncBufRead>
-where
-    B: Stream<Item = reqwest::Result<Bytes>> + Unpin,
-{
-    let r = async_read_of(stream);
-    BufReader::new(r).lines()
+    std::io::Error::new(std::io::ErrorKind::Other, error)
 }
