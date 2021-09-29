@@ -7,7 +7,8 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, Lines};
 
 use crate::manifest::lines::version_line;
 
-use self::lines::{file_line, FileLine, VersionLine};
+use self::lines::file_line;
+pub(crate) use self::lines::{FileLine, VersionLine};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Section {

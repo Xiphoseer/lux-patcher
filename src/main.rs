@@ -2,21 +2,21 @@
 
 use std::{
     fs::File,
-    io::{BufReader, BufWriter},
+    io::BufWriter,
     path::{Component, Path, PathBuf},
     str::FromStr,
 };
 
 use argh::FromArgs;
 use assembly_pack::sd0::stream::SegmentedStream;
-use assembly_xml::universe_config::Environment;
+use assembly_xml::universe_config::{CdnInfo, Environment};
 use color_eyre::eyre::Context;
 use futures_util::TryStreamExt;
 use log::info;
-use manifest::load_manifest;
+use manifest::{load_manifest, FileLine};
 use reqwest::Url;
 use terminal_menu::{button, label, menu, mut_menu, run};
-use tokio::io::AsyncBufRead;
+use tokio::io::{AsyncBufRead, BufReader};
 use tokio_util::io::StreamReader;
 
 use crate::{config::PatcherConfig, util::into_io_error};
@@ -75,7 +75,7 @@ where
 
 fn decompress_sd0(input: &Path, output: &Path) -> color_eyre::Result<()> {
     let file = File::open(input)?;
-    let mut buf = BufReader::new(file);
+    let mut buf = std::io::BufReader::new(file);
     let mut stream = SegmentedStream::new(&mut buf)?;
 
     let out = File::create(output)?;
@@ -83,6 +83,30 @@ fn decompress_sd0(input: &Path, output: &Path) -> color_eyre::Result<()> {
 
     std::io::copy(&mut stream, &mut writer).context("Streaming sd0 file")?;
     Ok(())
+}
+
+struct Patcher {
+    url: Url,
+    config: PatcherConfig,
+}
+
+impl Patcher {
+    fn get_url(&self, f: &FileLine) -> color_eyre::Result<Url> {
+        let suffix = f.to_path();
+        let url = self.url.join(&suffix)?;
+        Ok(url)
+    }
+
+    fn config_key(&self) -> String {
+        format!("{}/patcher.ini", self.config.patcherdirectory)
+    }
+
+    fn install_file_key(&self) -> String {
+        format!(
+            "{}/{}",
+            self.config.installerdirectory, self.config.installfile
+        )
+    }
 }
 
 struct Downloader {
@@ -94,6 +118,60 @@ impl Downloader {
         Self {
             client: reqwest::Client::new(),
         }
+    }
+
+    async fn setup_patcher(&self, cdn_info: &CdnInfo) -> color_eyre::Result<Patcher> {
+        // Find the patcher URL
+        let p_base = if cdn_info.secure {
+            format!("https://{}/", &cdn_info.patcher_url)
+        } else {
+            format!("http://{}/", &cdn_info.patcher_url)
+        };
+        let p_host = Url::parse(&p_base)?;
+        let p_dir_segment = format!("{}/", cdn_info.patcher_dir);
+        let url = p_host.join(&p_dir_segment)?;
+        let config_url = url.join("patcher.ini")?;
+
+        info!("Config: {}", config_url);
+
+        let config_str = self.get_text(config_url).await?;
+        let config = PatcherConfig::from_str(&config_str)?;
+
+        info!("Downloaded patcher config");
+
+        Ok(Patcher { url, config })
+    }
+
+    async fn download(
+        &mut self,
+        url: Url,
+        download_dir: &Path,
+        output_path: &Path,
+    ) -> color_eyre::Result<()> {
+        let mut sd0_filename = output_path.file_name().unwrap().to_owned();
+        sd0_filename.push(".sd0");
+        let sd0_path = download_dir.join(sd0_filename);
+        info!("saving to {}", sd0_path.display());
+
+        // Stream the compressed file to disk
+        let mut byte_stream = self.get_bytes_tokio(url).await?;
+        stream_to_file(&sd0_path, &mut byte_stream).await?;
+
+        info!(
+            "download index complete, decompressing to {}",
+            output_path.display()
+        );
+
+        // Create the parent folder
+        let output_dir = output_path.parent().unwrap();
+        tokio::fs::create_dir_all(output_dir).await?;
+
+        // Decompress the file
+        decompress_sd0(&sd0_path, output_path)?;
+
+        info!("removing compressed index file");
+        std::fs::remove_file(&sd0_path)?;
+        Ok(())
     }
 
     async fn get(&self, url: Url) -> color_eyre::Result<reqwest::Response> {
@@ -121,7 +199,7 @@ async fn main() -> color_eyre::Result<()> {
     let args: Options = argh::from_env();
 
     // Create client
-    let client = Downloader::new();
+    let mut client = Downloader::new();
 
     // Cleanup base parameter
     let options = Url::options();
@@ -158,30 +236,14 @@ async fn main() -> color_eyre::Result<()> {
     info!("Selected: {}", server.name);
     info!("{:?}", server.cdn_info);
 
-    // Find the patcher URL
-    let p_base = if server.cdn_info.secure {
-        format!("https://{}/", &server.cdn_info.patcher_url)
-    } else {
-        format!("http://{}/", &server.cdn_info.patcher_url)
-    };
-    let p_host = Url::parse(&p_base)?;
-    let p_dir_segment = format!("{}/", server.cdn_info.patcher_dir);
-    let patcher_url = p_host.join(&p_dir_segment)?;
-    let patcher_config_url = patcher_url.join("patcher.ini")?;
-
-    info!("Config: {}", patcher_config_url);
-
-    let patcher_config_str = client.get_text(patcher_config_url).await?;
-    let patcher_config = PatcherConfig::from_str(&patcher_config_str)?;
-
-    info!("Downloaded patcher config");
+    let patcher = client.setup_patcher(&server.cdn_info).await?;
 
     let install_dir = {
         let mut dir = std::env::current_dir()?;
         let install_path = args
             .install_dir
             .as_deref()
-            .unwrap_or_else(|| Path::new(&patcher_config.defaultinstallpath));
+            .unwrap_or_else(|| Path::new(&patcher.config.defaultinstallpath));
         join(&mut dir, install_path);
         dir
     };
@@ -189,11 +251,11 @@ async fn main() -> color_eyre::Result<()> {
     info!("Install dir: {}", install_dir.display());
     std::fs::create_dir_all(&install_dir)?;
 
-    let download_dir = install_dir.join(patcher_config.downloaddirectory);
+    let download_dir = install_dir.join(&patcher.config.downloaddirectory);
     info!("Download dir: {}", download_dir.display());
     std::fs::create_dir_all(&download_dir)?;
 
-    let version_url = patcher_url.join(&patcher_config.versionfile)?;
+    let version_url = patcher.url.join(&patcher.config.versionfile)?;
     info!("Version file: {}", version_url);
 
     // Get trunk.txt
@@ -206,40 +268,40 @@ async fn main() -> color_eyre::Result<()> {
     );
     info!("Found {} file(s)!", versions.files.len());
 
-    let patcher_config_key = format!("{}/patcher.ini", patcher_config.patcherdirectory);
-    let install_file_key = format!(
-        "{}/{}",
-        patcher_config.installerdirectory, patcher_config.installfile
-    );
-
+    let patcher_config_key = patcher.config_key();
     if let Some(f) = versions.files.get(&patcher_config_key) {
-        info!("patcher config is {:?} (ignoring)", &f.hash);
+        let patcher_config_url = patcher.get_url(f)?;
+        info!("patcher config is {}", patcher_config_url);
+
+        let patcher_config_path = install_dir.join(patcher_config_key);
+        client
+            .download(patcher_config_url, &download_dir, &patcher_config_path)
+            .await?;
     }
 
+    let install_file_key = patcher.install_file_key();
     if let Some(f) = versions.files.get(&install_file_key) {
         info!("installer is {:?} (ignoring)", &f.hash);
     }
 
-    if let Some(f) = versions.files.get(&patcher_config.indexfile) {
-        let index_suffix = f.to_path();
-        let index_url = patcher_url.join(&index_suffix)?;
-        let index_sd0_filename = format!("{}.sd0", patcher_config.indexfile);
-        let index_sd0_path = download_dir.join(index_sd0_filename);
-        let index_path = download_dir.join(&patcher_config.indexfile);
+    if let Some(f) = versions.files.get(&patcher.config.indexfile) {
+        let index_url = patcher.get_url(f)?;
         info!("index is {}", &index_url);
-        info!("saving index to {}", index_sd0_path.display());
 
-        let mut byte_stream = client.get_bytes_tokio(index_url).await?;
-        stream_to_file(&index_sd0_path, &mut byte_stream).await?;
+        let index_path = download_dir.join(&patcher.config.indexfile);
+        client
+            .download(index_url, &download_dir, &index_path)
+            .await?;
+
+        let index_file = tokio::fs::File::open(&index_path).await?;
+        let index_reader = BufReader::new(index_file);
+        let index = load_manifest(index_reader).await?;
 
         info!(
-            "download index complete, decompressing to {}",
-            index_path.display()
+            "Loading manifest {} (version {})",
+            index.version.name, index.version.version
         );
-        decompress_sd0(&index_sd0_path, &index_path)?;
-
-        info!("removing compressed index file");
-        std::fs::remove_file(&index_sd0_path)?;
+        info!("Found {} file(s)!", index.files.len());
     }
 
     Ok(())
