@@ -128,6 +128,15 @@ async fn main() -> color_eyre::Result<()> {
     // Load the index file
     let index = patcher.load_manifest(&patcher.config.indexfile).await?;
 
+    // Load the manifests
+    // Need to download both files, so that the default/trunk manifest is there for the on-demand variant
+    patcher
+        .ensure_meta(&mut cache, &index, &patcher.config.defaultmanifestfile)
+        .await?;
+    patcher
+        .ensure_meta(&mut cache, &index, &patcher.config.minimalmanifestfile)
+        .await?;
+
     // Load the pack catalog
     patcher
         .ensure_meta(&mut cache, &index, &patcher.config.packcatalog)
@@ -154,10 +163,6 @@ async fn main() -> color_eyre::Result<()> {
     .as_str();
 
     info!("Using manifest {}", manifestfile);
-
-    patcher
-        .ensure_meta(&mut cache, &index, manifestfile)
-        .await?;
 
     let manifest = patcher.load_manifest(manifestfile).await?;
 
