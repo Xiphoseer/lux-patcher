@@ -83,9 +83,9 @@ dependencies = [
 
 [[package]]
 name = "assembly-pack"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e832bd40257be081487dd3d633288895879ec0405a7425a5c8a87dfc1bf6e84"
+checksum = "11cb9957c04ba72ba5d3c65f0de0f6b33503a0627f2a78c57a92537de64250fa"
 dependencies = [
  "assembly-core",
  "flate2",

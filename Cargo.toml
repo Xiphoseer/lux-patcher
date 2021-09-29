@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 argh = "0.1.4"
 assembly-xml = "0.1"
-assembly-pack = "0.2.1"
+assembly-pack = "0.2.2"
 async-compat = "0.2"
 bytes = "1"
 color-eyre = "0.5"

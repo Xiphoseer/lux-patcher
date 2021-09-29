@@ -1,4 +1,7 @@
-use std::fmt::{self, Debug};
+use std::{
+    fmt::{self, Debug},
+    str::FromStr,
+};
 
 use nom::{
     bytes::complete::{take_while, take_while_m_n},
@@ -6,7 +9,7 @@ use nom::{
     combinator::{map, map_res, rest},
     multi::fill,
     sequence::{preceded, tuple},
-    IResult,
+    Finish, IResult,
 };
 use nom_supreme::final_parser::{final_parser, Location};
 
@@ -23,8 +26,8 @@ fn hex_primary(input: &str) -> IResult<&str, u8> {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(PartialEq, Eq)]
-pub(crate) struct MD5(pub [u8; 16]);
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub struct MD5(pub [u8; 16]);
 
 impl fmt::Debug for MD5 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -35,6 +38,14 @@ impl fmt::Debug for MD5 {
     }
 }
 
+impl FromStr for MD5 {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        md5(input).finish().map(|(_rest, b)| b).map_err(|_e| ())
+    }
+}
+
 pub(crate) fn md5(input: &str) -> IResult<&str, MD5> {
     let mut buf = [0u8; 16];
     let (input, ()) = fill(hex_primary, &mut buf[..])(input)?;
@@ -42,7 +53,7 @@ pub(crate) fn md5(input: &str) -> IResult<&str, MD5> {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) struct VersionLine {
+pub struct VersionLine {
     pub version: u32,
     pub hash: MD5,
     pub name: String,
@@ -72,7 +83,7 @@ pub(crate) fn version_line(input: &str) -> Result<VersionLine, nom::error::Error
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) struct FileLine {
+pub struct FileLine {
     pub filesize: u32,
     pub hash: MD5,
     pub compressed_filesize: u32,

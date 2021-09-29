@@ -3,12 +3,13 @@ mod lines;
 use std::collections::BTreeMap;
 
 use color_eyre::eyre::eyre;
+use log::info;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, Lines};
 
 use crate::manifest::lines::version_line;
 
 use self::lines::file_line;
-pub(crate) use self::lines::{FileLine, VersionLine};
+pub(crate) use self::lines::{FileLine, VersionLine, MD5};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Section {
@@ -54,7 +55,7 @@ where
     Ok(version)
 }
 
-pub(crate) struct Manifest {
+pub struct Manifest {
     pub version: VersionLine,
     pub files: BTreeMap<String, FileLine>,
 }
@@ -75,5 +76,12 @@ where
         let (filename, data) = file_line(&line)?;
         files.insert(filename.to_owned(), data);
     }
+
+    info!(
+        "Loading manifest {} (version {})",
+        &version.name, &version.version
+    );
+    info!("Found {} file(s)!", &files.len());
+
     Ok(Manifest { version, files })
 }
