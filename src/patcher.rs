@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use assembly_pack::pki::core::PackIndexFile;
+use assembly_pack::{
+    pki::core::PackIndexFile,
+    txt::{FileLine, Manifest},
+};
 use assembly_xml::universe_config::CdnInfo;
 use log::info;
 use reqwest::Url;
@@ -11,7 +14,7 @@ use crate::{
     config::PatcherConfig,
     crc::calculate_crc,
     download::Downloader,
-    manifest::{load_manifest, FileLine, Manifest},
+    manifest::{load_manifest},
     util::join,
 };
 

@@ -1,6 +1,6 @@
 use std::{fs::File, io::BufWriter, path::Path};
 
-use assembly_pack::sd0::stream::SegmentedStream;
+use assembly_pack::sd0::read::SegmentedDecoder;
 use color_eyre::eyre::Context;
 use futures_util::TryStreamExt;
 use log::info;
@@ -22,12 +22,12 @@ where
 fn decompress_sd0(input: &Path, output: &Path) -> color_eyre::Result<()> {
     let file = File::open(input)?;
     let mut buf = std::io::BufReader::new(file);
-    let mut stream = SegmentedStream::new(&mut buf)?;
+    let mut reader = SegmentedDecoder::new(&mut buf)?;
 
     let out = File::create(output)?;
     let mut writer = BufWriter::new(out);
 
-    std::io::copy(&mut stream, &mut writer).context("Streaming sd0 file")?;
+    std::io::copy(&mut reader, &mut writer).context("Streaming sd0 file")?;
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-use crate::manifest::MD5;
+use assembly_pack::md5::MD5Sum;
 use std::{
     collections::BTreeMap,
     fmt::Display,
@@ -21,7 +21,7 @@ pub struct CacheEntry {
     /// The (uncompressed) size of the file
     pub size: u32,
     /// The (uncompressed) hash of the file
-    pub hash: MD5,
+    pub hash: MD5Sum,
 }
 
 impl Display for CacheEntry {
