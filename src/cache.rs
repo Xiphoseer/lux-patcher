@@ -5,14 +5,14 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, BufWriter, ErrorKind, Write},
     path::Path,
-    time::{SystemTime, SystemTimeError},
+    //    time::{SystemTime, SystemTimeError},
 };
 
-pub fn current_time_f64() -> Result<f64, SystemTimeError> {
+/*pub fn current_time_f64() -> Result<f64, SystemTimeError> {
     let time = SystemTime::now();
     let dur = time.duration_since(SystemTime::UNIX_EPOCH)?;
     Ok(dur.as_secs_f64())
-}
+}*/
 
 /// One entry in the cache
 pub struct CacheEntry {

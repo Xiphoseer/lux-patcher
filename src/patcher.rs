@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 
 use assembly_pack::{
     pki::core::PackIndexFile,
@@ -11,7 +14,7 @@ use reqwest::Url;
 use tokio::io::BufReader;
 
 use crate::{
-    cache::{current_time_f64, Cache, CacheEntry, CacheKey},
+    cache::{Cache, CacheEntry, CacheKey},
     config::PatcherConfig,
     crc::calculate_crc,
     download::Downloader,
@@ -181,8 +184,13 @@ impl Patcher {
             // Download the file
             if needs_download {
                 self.net.download(url, &self.dirs.download, &path).await?;
+                let meta = tokio::fs::metadata(&path).await?;
 
-                let mtime = current_time_f64()?;
+                let mtime = {
+                    let time = meta.modified()?;
+                    let dur = time.duration_since(SystemTime::UNIX_EPOCH)?;
+                    dur.as_secs_f64()
+                };
                 cache.insert(
                     cache_key,
                     CacheEntry {
