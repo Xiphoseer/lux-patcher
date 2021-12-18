@@ -67,7 +67,8 @@ impl Downloader {
         decompress_sd0(&sd0_path, path)?;
 
         info!("removing compressed file");
-        std::fs::remove_file(&sd0_path)?;
+        std::fs::remove_file(&sd0_path)
+            .wrap_err_with(|| format!("Failed to remove {}", sd0_path.display()))?;
         Ok(())
     }
 

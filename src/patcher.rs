@@ -5,6 +5,7 @@ use assembly_pack::{
     txt::{FileLine, Manifest},
 };
 use assembly_xml::universe_config::CdnInfo;
+use color_eyre::eyre::{eyre, WrapErr};
 use log::info;
 use reqwest::Url;
 use tokio::io::BufReader;
@@ -113,7 +114,7 @@ impl Patcher {
         cache: &mut Cache,
         manifest: &Manifest,
         file: &str,
-    ) -> color_eyre::Result<()> {
+    ) -> color_eyre::Result<bool> {
         self.ensure(
             cache,
             manifest,
@@ -122,6 +123,7 @@ impl Patcher {
             file,
         )
         .await
+        .wrap_err_with(|| eyre!("Failed to ensure meta {}", file))
     }
 
     pub async fn ensure_file(
@@ -130,14 +132,14 @@ impl Patcher {
         pki: &PackIndexFile,
         manifest: &Manifest,
         file: &str,
-    ) -> color_eyre::Result<()> {
+    ) -> color_eyre::Result<bool> {
         let crc = calculate_crc(file.as_bytes());
         if let Some(meta) = pki.files.get(&crc) {
             info!(
                 "{} is cat {} in {}",
                 file, meta.category, &pki.archives[meta.pack_file as usize].path
             );
-            Ok(())
+            Ok(false)
         } else {
             self.ensure(
                 cache,
@@ -147,6 +149,7 @@ impl Patcher {
                 file,
             )
             .await
+            .wrap_err_with(|| eyre!("Failed to ensure {}", file))
         }
     }
 
@@ -157,7 +160,7 @@ impl Patcher {
         base_dir: &Path,
         base_key: &str,
         file: &str,
-    ) -> color_eyre::Result<()> {
+    ) -> color_eyre::Result<bool> {
         let path = base_dir.join(file);
         if let Some(f) = manifest.files.get(file) {
             let url = self.get_url(f)?;
@@ -189,8 +192,11 @@ impl Patcher {
                     },
                 );
             }
+            Ok(true)
+        } else {
+            log::warn!("{} not found in manifest!", file);
+            Ok(false)
         }
-        Ok(())
     }
 
     pub fn get_url(&self, f: &FileLine) -> color_eyre::Result<Url> {

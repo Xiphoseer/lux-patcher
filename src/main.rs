@@ -3,7 +3,7 @@ use std::{convert::TryFrom, path::PathBuf};
 use argh::FromArgs;
 use assembly_pack::pki::core::PackIndexFile;
 use assembly_xml::universe_config::Environment;
-use color_eyre::eyre::eyre;
+use color_eyre::eyre::{eyre, Context};
 use log::info;
 use manifest::load_manifest;
 use reqwest::Url;
@@ -138,14 +138,23 @@ async fn main() -> color_eyre::Result<()> {
         .await?;
 
     // Load the pack catalog
-    patcher
+    let has_pki = patcher
         .ensure_meta(&mut cache, &index, &patcher.config.packcatalog)
         .await?;
 
-    let catalog_file = patcher.dirs.download.join(&patcher.config.packcatalog);
-    let file = std::fs::File::open(catalog_file)?;
-    let pki =
-        PackIndexFile::try_from(file).map_err(|e| eyre!("Failed to load PKI file: {:?}", e))?;
+    let pki = if has_pki {
+        let catalog_file = patcher.dirs.download.join(&patcher.config.packcatalog);
+        let file = std::fs::File::open(&catalog_file)
+            .wrap_err_with(|| eyre!("Failed to open {}", catalog_file.display()))?;
+        PackIndexFile::try_from(file).map_err(|e| eyre!("Failed to load PKI file: {:?}", e))?
+    } else {
+        // PKI file with nothing
+        log::info!("Assuming empty PK catalog");
+        PackIndexFile {
+            archives: vec![],
+            files: Default::default(),
+        }
+    };
 
     let variant_menu = menu(vec![
         button(&format!("Minimal ({})", patcher.config.minimalmanifestfile)),
