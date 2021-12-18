@@ -14,7 +14,7 @@ use crate::{
     config::PatcherConfig,
     crc::calculate_crc,
     download::Downloader,
-    manifest::{load_manifest},
+    manifest::load_manifest,
     util::join,
 };
 

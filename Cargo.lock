@@ -69,9 +69,9 @@ checksum = "be4dc07131ffa69b8072d35f5007352af944213cde02545e2103680baed38fcd"
 
 [[package]]
 name = "assembly-pack"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "356f4b049d10773360015b5cb36702becacf6d08143421488652dfe0a4efbda3"
+checksum = "d3a4aa48933459d5908f148bbfa3251b2bd86ce5bd9f5b60c81a26e32a9aa001"
 dependencies = [
  "bincode",
  "crc",
