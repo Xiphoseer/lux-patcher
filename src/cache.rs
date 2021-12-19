@@ -26,7 +26,7 @@ pub struct CacheEntry {
 
 impl Display for CacheEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{},{},{:?}", self.mtime, self.size, self.hash)
+        write!(f, "{:.6},{},{:?}", self.mtime, self.size, self.hash)
     }
 }
 
