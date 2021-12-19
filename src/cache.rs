@@ -17,7 +17,7 @@ use std::{
 /// One entry in the cache
 pub struct CacheEntry {
     /// The time the file was written
-    pub mtime: f64,
+    pub mtime: Option<f64>,
     /// The (uncompressed) size of the file
     pub size: u32,
     /// The (uncompressed) hash of the file
@@ -26,7 +26,10 @@ pub struct CacheEntry {
 
 impl Display for CacheEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:.6},{},{:?}", self.mtime, self.size, self.hash)
+        if let Some(mtime) = self.mtime {
+            write!(f, "{:.6}", mtime)?;
+        }
+        write!(f, ",{},{:?}", self.size, self.hash)
     }
 }
 
@@ -62,7 +65,7 @@ impl Cache {
             let line = line?;
             let mut parts = line.split(',');
             let key = CacheKey(parts.next().unwrap().to_owned());
-            let mtime = parts.next().unwrap().parse().unwrap();
+            let mtime = parts.next().unwrap().parse().ok();
             let size = parts.next().unwrap().parse().unwrap();
             let hash = parts.next().unwrap().parse().unwrap();
             self.insert(key, CacheEntry { mtime, size, hash })
