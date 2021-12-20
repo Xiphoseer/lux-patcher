@@ -1,10 +1,12 @@
 //! Data for `boot.cfg`
 
+use regex::Regex;
 use serde::Serialize;
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 struct LDFWriter<T> {
     inner: T,
+    first: bool,
     delim: String,
 }
 
@@ -12,7 +14,17 @@ impl<T: std::fmt::Write> LDFWriter<T> {
     pub fn new(inner: T) -> Self {
         Self {
             inner,
+            first: true,
             delim: ",".to_string(),
+        }
+    }
+
+    fn check(&mut self) -> Result<(), fmt::Error> {
+        if self.first {
+            self.first = false;
+            Ok(())
+        } else {
+            self.inner.write_str(&self.delim)
         }
     }
 
@@ -21,18 +33,22 @@ impl<T: std::fmt::Write> LDFWriter<T> {
     }
 
     pub fn write_str(&mut self, key: &str, value: &str) -> Result<(), fmt::Error> {
+        self.check()?;
         write!(self.inner, "{}=0:{}", key, value)
     }
 
     pub fn write_i32(&mut self, key: &str, value: i32) -> Result<(), fmt::Error> {
+        self.check()?;
         write!(self.inner, "{}=1:{}", key, value)
     }
 
     pub fn write_u32(&mut self, key: &str, value: u32) -> Result<(), fmt::Error> {
+        self.check()?;
         write!(self.inner, "{}=5:{}", key, value)
     }
 
     pub fn write_bool(&mut self, key: &str, value: bool) -> Result<(), fmt::Error> {
+        self.check()?;
         if value {
             write!(self.inner, "{}=7:1", key)
         } else {
@@ -48,6 +64,7 @@ impl<T: std::fmt::Write> LDFWriter<T> {
 impl BootConfig {
     pub fn to_cfg(&self) -> Result<String, fmt::Error> {
         let mut writer = LDFWriter::new(String::new());
+        writer.set_delim(",\r\n".to_string());
         writer.write_str("SERVERNAME", &self.server_name)?;
         writer.write_str("PATCHSERVERIP", &self.patch_server_ip)?;
         writer.write_i32("PATCHSERVERPORT", self.patch_server_port)?;
@@ -114,4 +131,38 @@ pub struct BootConfig {
     pub locale: String,
     #[serde(rename = "TRACK_DSK_USAGE")]
     pub track_disk_usage: bool,
+}
+
+pub struct Token<'a> {
+    pub install_path: std::borrow::Cow<'a, str>,
+}
+
+impl<'a> Token<'a> {
+    pub fn resolve(self, input: &str) -> Cow<str> {
+        let pattern = Regex::new(r"\{%([a-z]+)\}").unwrap();
+        pattern.replace(input, self)
+    }
+}
+
+impl<'a> regex::Replacer for Token<'a> {
+    fn replace_append(&mut self, caps: &regex::Captures<'_>, dst: &mut String) {
+        let m = caps.get(1).unwrap();
+        if m.as_str() == "installpath" {
+            dst.push_str(&self.install_path)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    #[test]
+    fn test_token() {
+        let token = super::Token {
+            install_path: Cow::Borrowed("some\\path"),
+        };
+        let res = token.resolve("{%installpath}\\client\\boot.cfg");
+        assert_eq!(res.as_ref(), "some\\path\\client\\boot.cfg")
+    }
 }

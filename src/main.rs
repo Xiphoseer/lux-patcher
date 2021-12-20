@@ -9,7 +9,6 @@ use assembly_xml::universe_config::Environment;
 use color_eyre::eyre::{eyre, Context};
 use log::{info, warn};
 use manifest::load_manifest;
-use regex::Regex;
 use reqwest::Url;
 use terminal_menu::{button, label, menu, mut_menu, run};
 
@@ -191,13 +190,12 @@ async fn main() -> color_eyre::Result<()> {
     cache.save(&cache_path)?;
 
     // Create boot.cfg
-    let pattern = Regex::new(r"\{%([a-z]+)\}").unwrap();
-    let configfile = pattern.replace(
-        &patcher.config.configfile,
-        Token {
-            install_path: patcher.dirs.install.to_string_lossy(),
-        },
-    );
+
+    let token = boot::Token {
+        install_path: patcher.dirs.install.to_string_lossy(),
+    };
+    let configfile = token.resolve(&patcher.config.configfile);
+
     info!("Config file: {:?}", configfile);
     let patch_server_port = if server.cdn_info.secure { 443 } else { 80 };
     let config = boot::BootConfig {
@@ -229,17 +227,4 @@ async fn main() -> color_eyre::Result<()> {
         .wrap_err_with(|| eyre!("Failed to write {}", path.display()))?;
 
     Ok(())
-}
-
-struct Token<'a> {
-    install_path: std::borrow::Cow<'a, str>,
-}
-
-impl<'a> regex::Replacer for Token<'a> {
-    fn replace_append(&mut self, caps: &regex::Captures<'_>, dst: &mut String) {
-        let m = caps.get(0).unwrap();
-        if m.as_str() == "installpath" {
-            dst.push_str(&self.install_path)
-        }
-    }
 }
