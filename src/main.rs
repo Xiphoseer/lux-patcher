@@ -1,16 +1,21 @@
-use std::{convert::TryFrom, path::PathBuf};
+use std::{
+    convert::TryFrom,
+    path::{Path, PathBuf},
+};
 
 use argh::FromArgs;
 use assembly_pack::pki::core::PackIndexFile;
 use assembly_xml::universe_config::Environment;
 use color_eyre::eyre::{eyre, Context};
-use log::info;
+use log::{info, warn};
 use manifest::load_manifest;
+use regex::Regex;
 use reqwest::Url;
 use terminal_menu::{button, label, menu, mut_menu, run};
 
 use crate::{cache::Cache, download::Downloader, patcher::PatcherBuilder};
 
+mod boot;
 mod cache;
 mod config;
 mod crc;
@@ -108,6 +113,8 @@ async fn main() -> color_eyre::Result<()> {
                 &patcher_config_path,
             )
             .await?;
+    } else {
+        warn!("patcher config {:?} not found", patcher_config_key);
     }
 
     let install_file_key = patcher.install_file_key();
@@ -183,5 +190,56 @@ async fn main() -> color_eyre::Result<()> {
 
     cache.save(&cache_path)?;
 
+    // Create boot.cfg
+    let pattern = Regex::new(r"\{%([a-z]+)\}").unwrap();
+    let configfile = pattern.replace(
+        &patcher.config.configfile,
+        Token {
+            install_path: patcher.dirs.install.to_string_lossy(),
+        },
+    );
+    info!("Config file: {:?}", configfile);
+    let patch_server_port = if server.cdn_info.secure { 443 } else { 80 };
+    let config = boot::BootConfig {
+        server_name: server.name.clone(),
+        patch_server_ip: server.cdn_info.patcher_url.clone(),
+        patch_server_port,
+        auth_server_ip: server.authentication_ip.clone(),
+        logging: server.log_level as i32,
+        data_center_id: server.data_center_id,
+        cp_code: server.cdn_info.cp_code as i32,
+        akamai_dlm: server.cdn_info.use_dlm,
+        patch_server_dir: server.cdn_info.patcher_dir.clone(),
+        ugc_use_3d_services: server.use3d_services,
+        ugc_server_ip: server.ugc_cdn_info.patcher_url.clone(),
+        ugc_server_dir: server.ugc_cdn_info.patcher_dir.clone(),
+        manifest_file: patcher.config.defaultmanifestfile,
+        passurl: env_info.account_info.send_password_url,
+        sign_in_url: env_info.account_info.sign_in_url,
+        sign_up_url: env_info.account_info.sign_up_url,
+        register_url: env_info.game_info.client_url,
+        crash_log_url: env_info.game_info.crash_log_url,
+        locale: server.language.clone(),
+        track_disk_usage: true,
+    };
+    let path = Path::new(configfile.as_ref());
+    let boot_cfg = config.to_cfg()?;
+    tokio::fs::write(path, boot_cfg)
+        .await
+        .wrap_err_with(|| eyre!("Failed to write {}", path.display()))?;
+
     Ok(())
+}
+
+struct Token<'a> {
+    install_path: std::borrow::Cow<'a, str>,
+}
+
+impl<'a> regex::Replacer for Token<'a> {
+    fn replace_append(&mut self, caps: &regex::Captures<'_>, dst: &mut String) {
+        let m = caps.get(0).unwrap();
+        if m.as_str() == "installpath" {
+            dst.push_str(&self.install_path)
+        }
+    }
 }
