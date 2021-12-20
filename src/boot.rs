@@ -73,7 +73,7 @@ impl BootConfig {
         writer.write_u32("DATACENTERID", self.data_center_id)?;
         writer.write_i32("CPCODE", self.cp_code)?;
         writer.write_bool("AKAMAIDLM", self.akamai_dlm)?;
-        writer.write_str("AKAMAIDLM", &self.patch_server_dir)?;
+        writer.write_str("PATCHSERVERDIR", &self.patch_server_dir)?;
         writer.write_bool("UGCUSE3DSERVICES", self.ugc_use_3d_services)?;
         writer.write_str("UGCSERVERIP", &self.ugc_server_ip)?;
         writer.write_str("UGCSERVERDIR", &self.ugc_server_dir)?;
@@ -107,7 +107,7 @@ pub struct BootConfig {
     pub cp_code: i32,
     #[serde(rename = "AKAMAIDLM")]
     pub akamai_dlm: bool,
-    #[serde(rename = "AKAMAIDLM")]
+    #[serde(rename = "PATCHSERVERDIR")]
     pub patch_server_dir: String,
     #[serde(rename = "UGCUSE3DSERVICES")]
     pub ugc_use_3d_services: bool,
