@@ -76,7 +76,10 @@ impl FromStr for PatcherConfig {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut cfg = Self::default();
         for line in s.split('\n') {
-            if let Some((key, value)) = line.split_once("=") {
+            if line.starts_with('#') {
+                continue;
+            }
+            if let Some((key, value)) = line.split_once('=') {
                 let value = value.trim();
                 let value = value.trim_matches('"');
                 match key {
