@@ -2,6 +2,7 @@ use std::{convert::Infallible, fmt::Display, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Default, Clone)]
 pub struct ExcludeList {
+    #[allow(dead_code)]
     paths: Vec<PathBuf>,
 }
 
@@ -14,35 +15,83 @@ impl FromStr for ExcludeList {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct PatcherConfig {
-    pub patcherexeversion: String,   //="14.00"
-    pub serverdirectory: String,     //="lwoclient"
-    pub downloaddirectory: String,   //="versions"
-    pub patcherdirectory: String,    //="patcher"
-    pub installerdirectory: String,  //="installer"
-    pub versionfile: String,         //="version.txt"
-    pub indexfile: String,           //="index.txt"
-    pub defaultmanifestfile: String, //="trunk.txt"
-    pub minimalmanifestfile: String, //="frontend.txt"
-    pub hotfixmanifestfile: String,  //="hotfix.txt"
-    pub packcatalog: String,         //="primary.pki"
-    pub defaultinstallpath: String,  //=".."
-    pub installkey: String,          //="Software\NetDevil\LEGO Universe"
-    pub installfile: String,         //="lego_universe_install.exe"
-    pub configfile: String,          //="{%installpath}\client\boot.cfg"
-    pub win_exclude: ExcludeList, //=client/legouniverse_mac.exe,client/stlport.5.2.dll,cider/*,patcher/*
-    pub mac_exclude: ExcludeList, //=client/legouniverse.exe,client/d3dx9_34.dll,client/awesomium.dll,patcher/*
+    pub patcherexeversion: String,
+    pub serverdirectory: String,
+    pub downloaddirectory: String,
+    pub patcherdirectory: String,
+    pub installerdirectory: String,
+    pub versionfile: String,
+    pub indexfile: String,
+    pub defaultmanifestfile: String,
+    pub minimalmanifestfile: String,
+    pub hotfixmanifestfile: String,
+    pub packcatalog: String,
+    pub defaultinstallpath: String,
+    pub installkey: String,
+    pub installfile: String,
+    pub configfile: String,
+    pub win_exclude: ExcludeList,
+    pub mac_exclude: ExcludeList,
     pub noclean: Vec<PathBuf>,
-    pub caption: String,             //="LEGO Universe Updater"
-    pub cachefile: String,           //="quickcheck.txt"
-    pub check: bool,                 //="Yes"
-    pub quickcheck: bool,            //="Yes"
-    pub clean: bool,                 //="Yes"
-    pub log: bool,                   //="Yes"
-    pub waitstart: bool,             //="Yes"
-    pub usedefaultinstallpath: bool, //="True"
-    pub usedynamicdownload: bool,    //="True"
+    pub caption: String,
+    pub cachefile: String,
+    pub check: bool,
+    pub quickcheck: bool,
+    pub clean: bool,
+    pub log: bool,
+    pub waitstart: bool,
+    pub usedefaultinstallpath: bool,
+    pub usedynamicdownload: bool,
+}
+
+impl std::default::Default for PatcherConfig {
+    fn default() -> Self {
+        Self {
+            patcherexeversion: Default::default(),
+            serverdirectory: "lwoclient".to_string(),
+            downloaddirectory: "versions".to_string(),
+            patcherdirectory: "patcher".to_string(),
+            installerdirectory: "installer".to_string(),
+            versionfile: "version.txt".to_string(),
+            indexfile: "index.txt".to_string(),
+            defaultmanifestfile: "trunk.txt".to_string(),
+            minimalmanifestfile: "frontend.txt".to_string(),
+            hotfixmanifestfile: "hotfix.txt".to_string(),
+            packcatalog: "primary.pki".to_string(),
+            defaultinstallpath: "..".to_string(),
+            installkey: "Software\\NetDevil\\LEGO Universe".to_string(),
+            installfile: "lego_universe_install.exe".to_string(),
+            configfile: "{%installpath}\\client\\boot.cfg".to_string(),
+            win_exclude: ExcludeList {
+                paths: vec![
+                    PathBuf::from("client/legouniverse_mac.exe"),
+                    PathBuf::from("client/stlport.5.2.dll"),
+                    PathBuf::from("cider/*"),
+                    PathBuf::from("patcher/*"),
+                ],
+            },
+            mac_exclude: ExcludeList {
+                paths: vec![
+                    PathBuf::from("client/legouniverse.exe"),
+                    PathBuf::from("client/d3dx9_34.dll"),
+                    PathBuf::from("client/awesomium.dll"),
+                    PathBuf::from("patcher/*"),
+                ],
+            },
+            noclean: vec![],
+            caption: "LEGO Universe Updater".to_string(),
+            cachefile: "quickcheck.txt".to_string(),
+            check: true,
+            quickcheck: true,
+            clean: true,
+            log: true,
+            waitstart: true,
+            usedefaultinstallpath: true,
+            usedynamicdownload: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
