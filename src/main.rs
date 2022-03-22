@@ -194,7 +194,8 @@ async fn main() -> color_eyre::Result<()> {
     let token = boot::Token {
         install_path: patcher.dirs.install.to_string_lossy(),
     };
-    let configfile = token.resolve(&patcher.config.configfile);
+    let canonical_config_file = patcher.config.configfile.replace('\\', "/");
+    let configfile = token.resolve(&canonical_config_file);
 
     info!("Config file: {:?}", configfile);
     let patch_server_port = if server.cdn_info.secure { 443 } else { 80 };
@@ -219,12 +220,14 @@ async fn main() -> color_eyre::Result<()> {
         crash_log_url: env_info.game_info.crash_log_url,
         locale: server.language.clone(),
         track_disk_usage: true,
+        use_catalog: !pki.archives.is_empty(),
     };
-    let path = Path::new(configfile.as_ref());
-    let boot_cfg = config.to_cfg()?;
-    tokio::fs::write(path, boot_cfg)
+    let config_path = Path::new(configfile.as_ref());
+    let config_text = config.to_cfg()?;
+
+    tokio::fs::write(config_path, config_text)
         .await
-        .wrap_err_with(|| eyre!("Failed to write {}", path.display()))?;
+        .wrap_err_with(|| eyre!("Failed to write {}", config_path.display()))?;
 
     Ok(())
 }

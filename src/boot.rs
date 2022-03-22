@@ -85,6 +85,7 @@ impl BootConfig {
         writer.write_str("CRASHLOGURL", &self.crash_log_url)?;
         writer.write_str("LOCALE", &self.locale)?;
         writer.write_bool("TRACK_DSK_USAGE", self.track_disk_usage)?;
+        writer.write_bool("USE_CATALOG", self.use_catalog)?;
         Ok(writer.into_inner())
     }
 }
@@ -131,6 +132,8 @@ pub struct BootConfig {
     pub locale: String,
     #[serde(rename = "TRACK_DSK_USAGE")]
     pub track_disk_usage: bool,
+    #[serde(rename = "USE_CATALOG")]
+    pub use_catalog: bool,
 }
 
 pub struct Token<'a> {
